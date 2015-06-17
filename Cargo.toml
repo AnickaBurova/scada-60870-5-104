@@ -1,0 +1,4 @@
+[package]
+name = "s60870-5-104"
+version = "0.1.0"
+authors = ["milanburansky"]
