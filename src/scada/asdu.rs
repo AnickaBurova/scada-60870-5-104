@@ -363,6 +363,9 @@ macro_rules! is_bit_on {
 	($value : expr, $bit : expr) => (($value & $bit) != 0)
 }
 
+macro_rules! pinc {
+	($val : ident) => ({let temp = $val;$val += 1; temp})
+}
 
 impl Asdu{
 	pub fn deserialise<T : Read>(reader : &mut T, connection_settings : ConnectionSettings) -> Result<Asdu>{
@@ -379,11 +382,12 @@ impl Asdu{
 		let is_negative_confirm = is_bit_on!(buf[rindex], 0x40);
 		rindex = 3;
 		let originator_address = match connection_settings.get_cot_field_length(){
-			2 => {
-				let t = buf[rindex];
-				rindex+=1;
-				t
-			}
+			2 => buf[pinc!(rindex)],
+			// {
+			// 	let t = buf[rindex];
+			// 	rindex+=1;
+			// 	t
+			// }
 			_ => 0u8,
 		};
 		let common_address = match connection_settings.get_common_address_field_length() {

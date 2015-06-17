@@ -2,8 +2,6 @@ pub mod com;
 pub mod scada{
 	pub mod apdu;
 	pub mod asdu;
-	pub mod information_object;
-	pub mod information_element;
 }
 
 use std::thread;
