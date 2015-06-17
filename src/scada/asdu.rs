@@ -3,6 +3,7 @@ use std::clone::Clone;
 use std::io::Read;
 use std::io::Write;
 use std::io::Result;
+use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian, LittleEndian};
 use super::super::com::ConnectionSettings;
 
 // #[derive(Clone)]
@@ -367,32 +368,45 @@ macro_rules! pinc {
 	($val : ident) => ({let temp = $val;$val += 1; temp})
 }
 
+#[test]
+fn test_post_increment() {
+	let mut val = 0;
+	let buf = [1,2,3];
+	assert_eq!(buf[pinc!(val)],1);
+	assert_eq!(buf[pinc!(val)],2);
+	assert_eq!(buf[pinc!(val)],3);
+	assert_eq!(val,3);
+}
+
+#[test]
+fn test_big_low_end(){
+	use std::io::Cursor;
+	let mut data = vec![0xAB,0xCD,0xAB,0xCD];
+	let mut cursor = Cursor::new(data);
+	assert_eq!(cursor.read_u16::<LittleEndian>().unwrap(),(cursor.read_u8().unwrap() as u16) + ((cursor.read_u8().unwrap() as u16) << 8));
+	// assert_eq!(0xCDAB,);
+}
+
 impl Asdu{
 	pub fn deserialise<T : Read>(reader : &mut T, connection_settings : ConnectionSettings) -> Result<Asdu>{
-		let mut buf = vec![0u8;connection_settings.get_asdu_size()]; // 5 is maximum asdu header size
-		try!(reader.read(&mut buf));
-		let mut rindex = 0;
-		let typeid = buf[rindex];
-		rindex = 1;
-		let is_sequence_of_elements = is_bit_on!(buf[rindex], 0x80u8);
-		let sequence_length = buf[rindex] & 0x7fu8;
-		rindex = 2;
-		let cot = buf[rindex] & 0x3fu8;
-		let is_test = is_bit_on!(buf[rindex], 0x80);
-		let is_negative_confirm = is_bit_on!(buf[rindex], 0x40);
-		rindex = 3;
+		let typeid = try!(reader.read_u8());
+
+		let val = try!(reader.read_u8());
+		let is_sequence_of_elements = is_bit_on!(val, 0x80u8);
+		let sequence_length = val & 0x7fu8;
+
+		let val = try!(reader.read_u8());
+		let cot = val & 0x3fu8;
+		let is_test = is_bit_on!(val, 0x80);
+		let is_negative_confirm = is_bit_on!(val, 0x40);
+
 		let originator_address = match connection_settings.get_cot_field_length(){
-			2 => buf[pinc!(rindex)],
-			// {
-			// 	let t = buf[rindex];
-			// 	rindex+=1;
-			// 	t
-			// }
+			2 => try!(reader.read_u8()),
 			_ => 0u8,
 		};
 		let common_address = match connection_settings.get_common_address_field_length() {
-			1 => buf[rindex] as u16,
-			_ => (buf[rindex] as u16) + ((buf[rindex] as u16) << 8),
+			1 => try!(reader.read_u8()) as u16,
+			_ => try!(reader.read_u16::<LittleEndian>()),
 		};
 		let props = AsduProperties{
 			cause_of_transmission : CauseOfTransmission::ACTIVATION,
