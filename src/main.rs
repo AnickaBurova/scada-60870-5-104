@@ -96,45 +96,76 @@ impl fmt::Display for Test1{
 
 #[test]
 fn test_byte_reading() {
-	let mut rdr = Cursor::new(vec![2, 5, 3, 0]);
-	assert_eq!(517, rdr.read_u16::<BigEndian>().unwrap());
-	assert_eq!(768, rdr.read_u16::<BigEndian>().unwrap());	
+	let mut rdr = Cursor::new(vec![2, 3, 3, 0]);
+	assert_eq!(515, rdr.read_u16::<BigEndian>().unwrap());
+	assert_eq!(768, rdr.read_u16::<BigEndian>().unwrap());
 }
 
-#[test]
+// trait Deserialise<T : Test1>{
+	// fn deserialise<R : Read>(reader : &mut R) -> Result<Test1>{
+	// 	unreachable!();
+	// }
+
+	// fn deserialise(reader)
+// }
+
+macro_rules! deserialise {
+	($r : ident, $a : path) => ($a(&mut $r));
+	($r : ident, $a : path, $($rest:tt)*) => (vec!(deserialise!($a), deserialise!($($rest)*)))
+}
+
+
+macro_rules! deserialise_test1 {
+	($t : ty,$r : ident) => (Test1::deserialise(&mut $r))
+}
+
+
+// #[test]
 fn test_bytes_to_test1(){
 	let mut b = vec![0u8;10];
 	let mut cursor = Cursor::new(b);
-	match 2{
-		0 => {
-			cursor.write_u8(0);
-			cursor.write_u16::<BigEndian>(0xA0B);
+	let indices = vec![0,2,1,0];
+	for i in indices.iter() {
+		match *i{
+			0 => {
+				// cursor.write_u8(0);
+				cursor.write_u16::<BigEndian>(0xA0B);
+			}
+			1 => {
+				// cursor.write_u8(1);
+				cursor.write_f32::<BigEndian>(0.12);
+				cursor.write_u8(4);
+			}
+			2 => {
+				// cursor.write_u8(2);
+				cursor.write_u16::<BigEndian>(5);
+				cursor.write(&[65,66,67,68,69]);
+				cursor.write_u16::<BigEndian>(0xABCD);
+			}
+			_ => {}
 		}
-		1 => {
-			cursor.write_u8(1);
-			cursor.write_f32::<BigEndian>(0.12);
-			cursor.write_u8(4);
-		}
-		2 => {
-			cursor.write_u8(2);
-			cursor.write_u16::<BigEndian>(5);
-			cursor.write(&[65,66,67,68,69]);
-			cursor.write_u16::<BigEndian>(0xABCD);
-		}
-		_ => {}
 	}
 	let mut buf = cursor.into_inner();
 
 	// let mut buf = vec![0,0xA,0xB];
-	let a = Test1::deserialise(&mut Cursor::new(buf)).unwrap();
-	match a{
-		Test1::A(a) => assert_eq!(0xA0B,a),
-		Test1::B(a,b) => {assert_eq!(0.12,a);assert_eq!(4,b);}
-		Test1::C(a,b) => {
-			assert_eq!("ABCDE",a);
-			assert_eq!(0xABCD,b);
-		}
-	};
+	let mut reader = Cursor::new(buf);
+	// let c = deserialise!(Test1::deserialise_A,Test1::deserialise_C,Test1::deserialise_B,Test1::deserialise_A,reader);
+	// let c = deserialise!(Test1::deserialise_A,Test1::deserialise_C,reader);
+	// let a = Test1::deserialise(&mut reader).unwrap();
+	// let v = 0;
+	for i in indices.iter(){
+		// let a = c[v].unwrap();
+		// v+=1;
+		let a = deserialise_test1!(Test1,reader).unwrap();
+		match a{
+			Test1::A(a) => assert_eq!(0xA0B,a),
+			Test1::B(a,b) => {assert_eq!(0.12,a);assert_eq!(4,b);}
+			Test1::C(a,b) => {
+				assert_eq!("ABCDE",a);
+				assert_eq!(0xABCD,b);
+			}
+		};
+	}
 }
 
 impl Test1{
@@ -156,9 +187,25 @@ impl Test1{
 			_ => panic!("Wrong type!"),
 		}
 	}
+
+	pub fn deserialise_A<T : Read>(reader: &mut T) -> Result<Test1>{
+		Ok(Test1::A(try!(reader.read_u16::<BigEndian>())))
+	}
+
+	pub fn deserialise_B<T : Read>(reader: &mut T) -> Result<Test1>{
+		Ok(Test1::B(try!(reader.read_f32::<BigEndian>()),try!(reader.read_u8())))
+	}
+
+	pub fn deserialise_C<T : Read>(reader: &mut T) -> Result<Test1>{
+		let slen = try!(reader.read_u16::<BigEndian>());
+		let mut s = String::new();
+		try!(reader.take(slen as u64).read_to_string(&mut s));
+		Ok(Test1::C(s,try!(reader.read_u16::<BigEndian>())))
+	}
 }
 
-fn main() 
+
+fn main()
 {
 	use std::fmt::Write;
 	printallln!(Test1::A(32),"Anca",3);
